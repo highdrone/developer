@@ -1,131 +1,124 @@
-a Chrome Manifest V3 extension that reads the current page, and offers a popup UI that has the page title+content and a textarea for a prompt (with a default value we specify). When the user hits submit, it sends the page title+content to the Anthropic Claude API along with the up to date prompt to summarize it. The user can modify that prompt and re-send the prompt+content to get another summary view of the content.
+a Streamlit app with an interactive forecasting dashboard that connects to a Salesforce Org for the data. Sidebar with filters. Styled like Google. Include a detailed README.md, and a requirements.txt file with the required packages. Must include visualizations: 1. A line chart showing the total number of opportunities by month. 2. A bar chart showing the total number of opportunities by stage. 3. A bar chart showing the total number of opportunities by lead source. 4. A bar chart showing the total number of opportunities by amount. 5. A line chart showing the total number of opportunities by close date. 6. A bar chart showing the total number of opportunities by type. 7. A bar chart showing the total number of opportunities by product.
 
-- Only when clicked:
-  - it injects a content script `content_script.js` on the currently open tab, and accesses the title `pageTitle` and main content (innerText) `pageContent` of the currently open page 
-  (extracted via an injected content script, and sent over using a `storePageContent` action) 
-  - in the background, receives the `storePageContent` data and stores it
-  - only once the new page content is stored, then it pops up a full height window with a minimalistic styled html popup
-  - in the popup script
-    - the popup should display a 10px tall rounded css animated red and white candy stripe loading indicator `loadingIndicator`, while waiting for the anthropic api to return
-      - with the currently fetching page title and a running timer in the center showing time elapsed since call started
-      - do not show it until the api call begins, and hide it when it ends.
-    - retrieves the page content data using a `getPageContent` action (and the background listens for the `getPageContent` action and retrieves that data) and displays the title at the top of the popup
-    - check extension storage for an `apiKey`, and if it isn't stored, asks for an API key to Anthropic Claude and stores it.
-    - at the bottom of the popup, show a vertically resizable form that has:
-      - a 2 line textarea with an id and label of `userPrompt`
-        - `userPrompt` has a default value of
-            ```js
-            defaultPrompt = `Please provide a detailed, easy to read HTML summary of the given content`;
-            ```js
-      - a 4 line textarea with an id and label of `stylePrompt`
-        - `stylePrompt` has a default value of
-            ```js
-            defaultStyle = `Respond with 3-4 highlights per section with important keywords, people, numbers, and facts bolded in this HTML format:
-            
-            <h1>{title here}</h1>
-            <h3>{section title here}</h3>
-            <details>
-              <summary>{summary of the section with <strong>important keywords, people, numbers, and facts bolded</strong> and key quotes repeated}</summary>
-              <ul>
-                <li><strong>{first point}</strong>: {short explanation with <strong>important keywords, people, numbers, and facts bolded</strong>}</li>
-                <li><strong>{second point}</strong>: {same as above}</li>
-                <li><strong>{third point}</strong>: {same as above}</li>
-                <!-- a fourth point if warranted -->
-              </ul>
-            </details>
-            <h3>{second section here}</h3>
-            <p>{summary of the section with <strong>important keywords, people, numbers, and facts bolded</strong> and key quotes repeated}</p>
-            <details>
-              <summary>{summary of the section with <strong>important keywords, people, numbers, and facts bolded</strong> and key quotes repeated}</summary>
-              <ul>
-                <!-- as many points as warranted in the same format as above -->
-              </ul>
-            </details>
-            <h3>{third section here}</h3>
-            <!-- and so on, as many sections and details/summary subpoints as warranted -->
+Include the use of GPT-4 API in a meaninful and innovative way.
 
-            With all the words in brackets replaced by the summary of the content. sanitize non visual HTML tags with HTML entities, so <template> becomes &lt;template&gt; but <strong> stays the same. Only draw from the source content, do not hallucinate. Finally, end with other questions that the user might want answered based on this source content:
+## Debugging
 
-            <hr>
-            <h2>Next prompts</h2>
-            <ul>
-              <li>{question 1}</li>
-              <li>{question 2}</li>
-              <li>{question 3}</li>
-            </ul>`;
-            ```js
-      - and in the last row, on either side,
-        - and a nicely styled submit button with an id of `sendButton` (tactile styling that "depresses" on click)
-      - only when `sendButton` is clicked, calls the Anthropic model endpoint https://api.anthropic.com/v1/complete with: 
-        - append the page title
-        - append the page content
-        - add the prompt which is a concatenation of
-            ```js
-            finalPrompt = `Human: ${userPrompt} \n\n ${stylePrompt} \n\n Assistant:`
-            ```
-        - and use the `claude-instant-v1` model (if `pageContent` is <70k words) or the `claude-instant-v1-100k` model (if more) 
-        - requesting max tokens = the higher of (25% of the length of the page content, or 750 words)
-        - if another submit event is hit while the previous api call is still inflight, cancel that and start the new one
-    - renders the Anthropic-generated result at the top of the popup in a div with an id of `content`
+1. In `dashboard.py`, you are importing `selected_filters` from `sidebar.py`, but `selected_filters` is not defined in `sidebar.py`. Instead,  
+you have a function called `create_sidebar()` that returns `filter_options` and `apply_filters`. You should call this function in 
+`dashboard.py` to get the `selected_filters`.
 
-Important Details:
+Fix: In `dashboard.py`, replace the import statement with the following:
 
-- It has to run in a browser environment, so no Nodejs APIs allowed.
-
-- the return signature of the anthropic api is curl https://api.anthropic.com/v1/complete\
-  -H "x-api-key: $API_KEY"\
-  -H 'content-type: application/json'\
-  -d '{
-    "prompt": "\n\nHuman: Tell me a haiku about trees\n\nAssistant: ",
-    "model": "claude-v1", "max_tokens_to_sample": 1000, "stop_sequences": ["\n\nHuman:"]
-  }'
-{"completion":" Here is a haiku about trees:\n\nSilent sentinels, \nStanding solemn in the woods,\nBranches reaching sky.","stop":"\n\nHuman:","stop_reason":"stop_sequence","truncated":false,"log_id":"f5d95cf326a4ac39ee36a35f434a59d5","model":"claude-v1","exception":null}
-
-- in the string prompt sent to Anthropic, first include the page title and page content, and finally append the prompt, clearly vertically separated by spacing.
-
-- if the Anthropic api call is a 401, handle that by clearing the stored anthropic api key and asking for it again.
-
-- add styles to make sure the popup's styling follows the basic rules of web design, for example having margins around the body, and a system font stack.
-
-- style the popup body with <link rel="stylesheet" href="https://unpkg.com/mvp.css@1.12/mvp.css"> but insist on body margins of 16 and a minimum width of 400 and height of 600.
-
-## debugging notes
-
-inside of background.js, just take the getPageContent response directly
-
-```js
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'storePageContent') {
-    // dont access request.pageContent
-    chrome.storage.local.set({ pageContent: request }, () => {
-      sendResponse({ success: true });
-    });
-  } else if (request.action === 'getPageContent') {
-    chrome.storage.local.get(['pageContent'], (result) => {
-      // dont access request.pageContent
-      sendResponse(result);
-    });
-  }
-  return true;
-});
+```python
+from sidebar import create_sidebar
 ```
 
-inside of popup.js, Update the function calls to `requestAnthropicSummary`
-in `popup.js` to pass the `apiKey`:
+Then, call the `create_sidebar()` function in the `main()` function:
 
-```javascript
-chrome.storage.local.get(['apiKey'], (result) => {
-  const apiKey = result.apiKey;
-  requestAnthropicSummary(defaultPrompt, apiKey);
-});
-
-sendButton.addEventListener('click', () => {
-  chrome.storage.local.get(['apiKey'], (result) => {
-    const apiKey = result.apiKey;
-    requestAnthropicSummary(userPrompt.value, apiKey);
-  });
-});
+```python
+selected_filters, apply_filters = create_sidebar()
 ```
 
-in `popup.js`, store the defaultPrompt at the top level.
-also, give a HTML format to the anthropic prompt
+2. In `data_processing.py`, the `load_data()` function expects a `file_path` argument, but you are not providing it when calling the function  
+in other files. You should either provide a valid file path or set a default value for the `file_path` parameter.
+
+Fix: Add a default value for the `file_path` parameter in `data_processing.py`:
+
+```python
+def load_data(file_path: str = "your_data_file.csv") -> pd.DataFrame:
+```
+
+Replace `your_data_file.csv` with the actual file name of your data file.
+
+3. In `forecasting.py`, the `generate_forecast()` function expects two arguments: `data` and `selected_filters`. However, in `dashboard.py`,   
+you are only providing one argument when calling this function. You should pass both `data` and `selected_filters` as arguments.
+
+Fix: In `dashboard.py`, update the `generate_forecast()` function call:
+
+```python
+forecast_data = generate_forecast(preprocessed_data, selected_filters)
+```
+
+4. In `sidebar.py`, you are importing and using functions from `data_processing` and `forecasting` that are not needed in this file. You shouldremove these imports and the `update_sidebar_data()` function, as it is not being used.
+
+Fix: Remove the following lines from `sidebar.py`:
+
+```python
+from data_processing import load_data, preprocess_data, apply_filters_to_data
+from forecasting import generate_forecast
+```
+
+And remove the `update_sidebar_data()` function.
+
+5. In `streamlit_app.py`, you are importing and using functions that are not needed or already implemented in `dashboard.py`. You should removethis file and use `dashboard.py` as your main Streamlit app file.
+
+Fix: Delete the `streamlit_app.py` file and run your app using `dashboard.py`.
+
+. Missing data file: Make sure the data file "your_data_file.csv" exists in the same directory as your Python files or provide the correct    
+file path in the `load_data` function in `data_processing.py`.
+
+2. Missing Streamlit package: Ensure that you have installed the Streamlit package using `pip install streamlit`.
+
+3. Missing pandas package: Make sure you have installed the pandas package using `pip install pandas`.
+
+4. Incorrect file execution: Ensure that you are running the `streamlit_app.py` file to start the Streamlit app. You can run the app using the 
+command `streamlit run streamlit_app.py`.
+
+5. Unused CSS file: The `styles.css` file is not being used in the current implementation. To apply the styles, you can use the `st.markdown`  
+function to include the CSS in your Streamlit app. Add the following code to the `dashboard.py` file:
+
+```python
+def include_css(css_file: str):
+    with open(css_file, "r") as f:
+        css = f.read()
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+# Add this line at the beginning of the main() function in dashboard.py
+include_css("styles.css")
+```
+
+6. Date range filter: The date range filter in `sidebar.py` returns a tuple with two dates, but it is not being used correctly in the 
+`apply_filters_to_data` function in `data_processing.py`. You can update the function to handle the date range filter as follows:
+
+```python
+def apply_filters_to_data(data: pd.DataFrame, selected_filters: dict) -> pd.DataFrame:
+    filtered_data = data.copy()
+    
+    for filter_key, filter_value in selected_filters.items():
+        if filter_value:
+            if filter_key == "date_range":
+                start_date, end_date = filter_value
+                filtered_data = filtered_data[(filtered_data["date"] >= start_date) & (filtered_data["date"] <= end_date)]
+            else:
+                filtered_data = filtered_data[filtered_data[filter_key] == filter_value]
+    
+    return filtered_data
+```
+
+Make sure your data has a "date" column with a proper date format for this to work.
+
+7. Add altair<5 to requirements.txt
+
+8. Set the sdk_version in README.md to 1.20.0
+
+The error you are encountering is due to the use of `None` values in the `date_input` function in the `sidebar.py` file. The `date_input`      
+function expects a valid date or a list of dates, but it is receiving `None` values, which is causing the TypeError.
+
+To fix this issue, you can replace the `None` values with default date values. Here's how you can modify the `create_sidebar` function in the  
+`sidebar.py` file:
+
+```python
+import datetime
+
+def create_sidebar():
+    st.sidebar.title("Filters")
+
+    today = datetime.date.today()
+    start_date = today - datetime.timedelta(days=30)
+    end_date = today
+
+    default_date_range = [start_date, end_date]
+    date_range = st.sidebar.date_input("Date range", default_date_range)
+
+    # Rest of the code remains the same
